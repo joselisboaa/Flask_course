@@ -10,9 +10,9 @@ class ItemSchema(Schema):
 class ItemUpdateSchema(Schema):
     name = fields.Str()
     price = fields.Float()
+    store_id = fields.Str(required=True)
 
 class StoreSchema(Schema):
     id = fields.Str(dump_only=True)
     name = fields.Str(required=True)
-    items = fields.List()
 

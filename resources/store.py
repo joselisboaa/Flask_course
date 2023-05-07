@@ -3,21 +3,23 @@ from db import stores
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from schemas import StoreSchema
 
 blp = Blueprint("Stores", __name__, description="Operations on stores")
 
 
 @blp.route("/store/<string:store_id>")
 class Store(MethodView):
+    @blp.response(200, StoreSchema)
     def getById(self, store_id):
         try:
             return stores[store_id], 200
         except KeyError:
             abort(404, message="Loja não encontrada")
 
-    def put(self, store_id):
-        store_data = request.get_json()
-
+    @blp.arguments(StoreSchema)
+    @blp.response(201, StoreSchema)
+    def put(self, store_data, store_id):
         try:
             store = stores[store_id]
             store |= store_data
@@ -36,13 +38,15 @@ class Store(MethodView):
 
 @blp.route("/store")
 class StoreList(MethodView):
+    @blp.arguments(StoreSchema)
+    @blp.response(200, StoreSchema)
     def get(self):
         return {"stores": list(stores.values())}, 200
 
 
-    def post(self):
-        store_data = request.get_json()
-
+    @blp.arguments(StoreSchema)
+    @blp.response(201, StoreSchema)
+    def post(self, store_data):
         for store in stores.values():
             if store_data["name"] == store["name"]:
                 abort(400, message="A Loja já existe.")
