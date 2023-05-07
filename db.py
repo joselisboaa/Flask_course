@@ -6,6 +6,7 @@ stores = {
 items = {
     1: {
         "name": "Chair",
-        "price": 15.99
+        "price": 15.99,
+        "store_id": ""
     }
 }
