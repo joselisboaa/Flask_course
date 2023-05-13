@@ -1,9 +1,11 @@
 import uuid
-from db import stores
-from flask import request
+from flask import request, make_response, jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from sqlalchemy.exc import SQLAlchemyError
 from schemas import StoreSchema
+from models import StoreModel, ItemModel
+from db import db
 
 blp = Blueprint("Stores", __name__, description="Operations on stores")
 
@@ -11,29 +13,68 @@ blp = Blueprint("Stores", __name__, description="Operations on stores")
 @blp.route("/store/<string:store_id>")
 class Store(MethodView):
     @blp.response(200, StoreSchema)
-    def getById(self, store_id):
-        try:
-            return stores[store_id], 200
-        except KeyError:
-            abort(404, message="Loja não encontrada")
+    def get(self, store_id):
+        store = StoreModel.query.filter(StoreModel.id == store_id).first()
+        if store is None:
+            return make_response(jsonify({"message": "Loja não existente."}), 404)
+
+        store_dto = {
+            "id": store.id,
+            "name": store.name,
+            "items": [],
+        }
+
+        items = ItemModel.query.filter(ItemModel.store_id == store.id)
+        for item in items:
+            item_dto = {
+                "id": item.id,
+                "name": item.name,
+                "price": item.price,
+            }
+
+            store_dto["items"].append(item_dto)
+
+        return make_response(jsonify(store_dto), 200)
 
     @blp.arguments(StoreSchema)
     @blp.response(201, StoreSchema)
     def put(self, store_data, store_id):
-        try:
-            store = stores[store_id]
-            store |= store_data
-            return store, 201
-        except KeyError:
-            abort(404, message="Loja não encontrada.")
+        store = StoreModel.query.get(store_id)
 
+        if store is None:
+            return make_response(jsonify({"message": "Loja não encontrada"}), 404)
+        else:
+            store.name = store_data["name"]
+
+        store_dto = {
+            "name": store.name,
+            "items": [],
+        }
+
+        for itens in store.items:
+            item_dto = {
+                "id": itens.id,
+                "name": itens.name,
+                "price": itens.price,
+            }
+
+            store_dto["items"].append(item_dto)
+
+        db.session.add(store)
+        db.session.commit()
+
+        return make_response(jsonify(store_dto), 201)
 
     def delete(self, store_id):
-        try:
-            del stores[store_id]
-            return {"message": "Loja deletada com sucesso."}, 204
-        except KeyError:
-            abort(404, message="Loja não encontrada.")
+        store = StoreModel.query.filter(StoreModel.id == store_id).first()
+
+        if store is None:
+            return make_response(jsonify({"message": "Loja não encontrada."}), 404)
+
+        db.session.delete(store)
+        db.session.commit()
+
+        return make_response(jsonify({"message": "Loja excluída com sucesso"}), 204)
 
 
 @blp.route("/store")
@@ -41,18 +82,17 @@ class StoreList(MethodView):
     @blp.arguments(StoreSchema)
     @blp.response(200, StoreSchema)
     def get(self):
-        return {"stores": list(stores.values())}, 200
+        return StoreModel.query.all()
 
 
     @blp.arguments(StoreSchema)
     @blp.response(201, StoreSchema)
     def post(self, store_data):
-        for store in stores.values():
-            if store_data["name"] == store["name"]:
-                abort(400, message="A Loja já existe.")
+        store = StoreModel(**store_data)
 
-        store_id = uuid.uuid4().hex
-        store = {**store_data, "store_id": store_id}
-        stores[store_id] = store
-        return store, 201
-
+        try:
+            db.session.add(store)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, "Error.")
+        return store
